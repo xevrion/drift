@@ -76,12 +76,15 @@ struct PanelView: View {
     }
 
     private func row(_ title: String, _ icon: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
+        HStack {
             Label(title, systemImage: icon)
                 .font(.system(size: 13))
+            Spacer(minLength: 8)
+            Toggle(title, isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
         }
-        .toggleStyle(.switch)
-        .controlSize(.small)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .glassEffect(.regular, in: .capsule)
