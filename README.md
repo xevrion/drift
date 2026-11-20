@@ -6,14 +6,19 @@ A tiny native menu bar app: Swift, a global `CGEvent` tap, and the Accessibility
 
 ## Install
 
-Grab `Drift.zip` from [Releases](../../releases), unzip, move `Drift.app` to `/Applications` and open it. It's ad-hoc signed, so the first time right-click → **Open**.
-
-Or build it yourself (macOS 26+, Xcode 26+):
+**Build it yourself** (cleanest, 10 seconds, needs Xcode 26+):
 
 ```sh
-./build.sh
-open build/Drift.app
+git clone https://github.com/xevrion/drift && cd drift
+./build.sh && open build/Drift.app
 ```
+
+**Or download** `Drift.zip` from [Releases](../../releases), unzip and move `Drift.app` to `/Applications`. Drift isn't notarized yet, so macOS blocks the first launch. Either:
+
+- open it once, then go to System Settings → Privacy & Security and click **Open Anyway**, or
+- run `xattr -dr com.apple.quarantine /Applications/Drift.app` and open it normally.
+
+Requires macOS 26 or later.
 
 Grant **Accessibility** when asked (System Settings → Privacy & Security → Accessibility). Drift starts by itself once it's allowed.
 
