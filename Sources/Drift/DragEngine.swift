@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 
 /// Global mouse hook: hold the modifier and left-drag to move a window,
-/// right-drag to resize it from the nearest corner.
+/// right-drag to resize it from the nearest corner, double-click to fill the screen.
 final class DragEngine {
     static let shared = DragEngine()
 
@@ -28,6 +28,8 @@ final class DragEngine {
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var session: Session?
+    private var swallowUntilUp = false
+    private var savedFrames: [(window: AXUIElement, frame: CGRect)] = []
     private let systemWide = AXUIElementCreateSystemWide()
     private let minSize = CGSize(width: 160, height: 100)
 
@@ -83,8 +85,17 @@ final class DragEngine {
         case .leftMouseDown, .rightMouseDown:
             let mode: Mode = type == .leftMouseDown ? .move : .resize
             guard Settings.enabled,
-                  mode == .move || Settings.resizeEnabled,
-                  event.flags.intersection(Settings.relevantFlags) == Settings.modifier.flags,
+                  event.flags.intersection(Settings.relevantFlags) == Settings.modifier.flags
+            else { return pass }
+
+            if mode == .move, Settings.fillEnabled,
+               event.getIntegerValueField(.mouseEventClickState) == 2,
+               toggleFill(at: event.location) {
+                swallowUntilUp = true
+                return nil
+            }
+
+            guard mode == .move || Settings.resizeEnabled,
                   begin(mode: mode, at: event.location)
             else { return pass }
             return nil
@@ -95,6 +106,10 @@ final class DragEngine {
             return nil
 
         case .leftMouseUp, .rightMouseUp:
+            if swallowUntilUp {
+                swallowUntilUp = false
+                return nil
+            }
             guard session != nil else { return pass }
             end()
             return nil
@@ -177,6 +192,61 @@ final class DragEngine {
         onDragFinished?()
     }
 
+    // MARK: - Fill screen
+
+    /// Fills the visible area of the window's screen, or restores the frame it
+    /// had before if it's already filling it.
+    private func toggleFill(at point: CGPoint) -> Bool {
+        guard let window = window(at: point),
+              let origin: CGPoint = window.value(kAXPositionAttribute),
+              let size: CGSize = window.value(kAXSizeAttribute),
+              let screen = visibleFrame(containing: CGPoint(x: origin.x + size.width / 2, y: origin.y + size.height / 2))
+        else { return false }
+
+        var pid: pid_t = 0
+        AXUIElementGetPid(window, &pid)
+        guard pid != getpid() else { return false }
+
+        let current = CGRect(origin: origin, size: size)
+        let saved = savedFrames.firstIndex { CFEqual($0.window, window) }
+        let target: CGRect
+        if let saved, current.isClose(to: screen) {
+            target = savedFrames.remove(at: saved).frame
+        } else {
+            if let saved { savedFrames.remove(at: saved) }
+            savedFrames.append((window, current))
+            if savedFrames.count > 64 { savedFrames.removeFirst() }
+            target = screen
+        }
+
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        NSRunningApplication(processIdentifier: pid)?.activate()
+        writer.async {
+            let enhanced = app.bool("AXEnhancedUserInterface") ?? false
+            if enhanced { app.set("AXEnhancedUserInterface", kCFBooleanFalse) }
+            // Size, move, size again: the first resize can be clamped by the
+            // screen edge before the window has moved.
+            window.set(kAXSizeAttribute, target.size)
+            window.set(kAXPositionAttribute, target.origin)
+            window.set(kAXSizeAttribute, target.size)
+            if enhanced { app.set("AXEnhancedUserInterface", kCFBooleanTrue) }
+        }
+        onDragFinished?()
+        return true
+    }
+
+    /// The visible frame (minus menu bar and Dock) of the screen holding
+    /// `point`, in AX coordinates: top-left origin of the primary screen.
+    private func visibleFrame(containing point: CGPoint) -> CGRect? {
+        guard let primaryHeight = NSScreen.screens.first?.frame.height else { return nil }
+        let flip = { (r: CGRect) in
+            CGRect(x: r.minX, y: primaryHeight - r.maxY, width: r.width, height: r.height)
+        }
+        let screen = NSScreen.screens.first { flip($0.frame).contains(point) } ?? NSScreen.main
+        return screen.map { flip($0.visibleFrame) }
+    }
+
     // MARK: - Coalesced AX writes
 
     private func enqueue(_ window: AXUIElement, _ frame: Frame) {
@@ -220,6 +290,13 @@ final class DragEngine {
             element = parent
         }
         return nil
+    }
+}
+
+private extension CGRect {
+    func isClose(to other: CGRect, tolerance: CGFloat = 8) -> Bool {
+        abs(minX - other.minX) <= tolerance && abs(minY - other.minY) <= tolerance
+            && abs(width - other.width) <= tolerance && abs(height - other.height) <= tolerance
     }
 }
 

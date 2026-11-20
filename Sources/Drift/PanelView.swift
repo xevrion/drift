@@ -4,6 +4,7 @@ struct PanelView: View {
     @EnvironmentObject private var state: AppState
     @AppStorage(Settings.Keys.enabled) private var enabled = true
     @AppStorage(Settings.Keys.resize) private var resize = true
+    @AppStorage(Settings.Keys.fill) private var fill = true
     @AppStorage(Settings.Keys.modifier) private var modifier: Modifier = .command
     @Namespace private var glass
 
@@ -20,6 +21,8 @@ struct PanelView: View {
                 VStack(spacing: 8) {
                     row("Drag windows", "hand.point.up.left", isOn: $enabled)
                     row("Right-drag to resize", "arrow.up.left.and.arrow.down.right", isOn: $resize)
+                        .disabled(!enabled)
+                    row("Double-click to fill screen", "arrow.up.backward.and.arrow.down.forward.rectangle", isOn: $fill)
                         .disabled(!enabled)
                     row("Launch at login", "power", isOn: Binding(
                         get: { state.launchAtLogin },

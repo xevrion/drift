@@ -30,6 +30,7 @@ enum Settings {
 
     static var enabled: Bool { UserDefaults.standard.object(forKey: Keys.enabled) as? Bool ?? true }
     static var resizeEnabled: Bool { UserDefaults.standard.object(forKey: Keys.resize) as? Bool ?? true }
+    static var fillEnabled: Bool { UserDefaults.standard.object(forKey: Keys.fill) as? Bool ?? true }
     static var modifier: Modifier {
         UserDefaults.standard.string(forKey: Keys.modifier).flatMap(Modifier.init) ?? .command
     }
@@ -37,6 +38,7 @@ enum Settings {
     enum Keys {
         static let enabled = "enabled"
         static let resize = "resizeEnabled"
+        static let fill = "fillEnabled"
         static let modifier = "modifier"
         static let drags = "dragCount"
     }
